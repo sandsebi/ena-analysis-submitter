@@ -26,10 +26,19 @@ class createAnalysisXML:
         if not isinstance(references, list):
             references = references.split(",")
 
-        print(references)
         for reference in references:
             subElt = etree.SubElement(parent_element, element_name, accession=reference)
         return subElt
+
+    def build_file_element(self, parent_element):
+        """
+        Create the files element within the XML using the analysis file information list of dictionaries
+        :param parent_element: Element to add the files section to
+        :return: Adding run section of XML
+        """
+        for file in self.analysis_file:
+            fileElt = etree.SubElement(parent_element, 'FILE', filename=file.get('name'), filetype=file.get('type'), checksum_method="MD5", checksum=file.get('md5_value'))
+        return fileElt
 
     def add_analysis_attributes(self, parent_element):
         """
@@ -51,7 +60,6 @@ class createAnalysisXML:
         analysis_set = etree.Element('ANALYSIS_SET')
         analysis_xml = etree.ElementTree(analysis_set)
 
-        print(self.centre_name)
         if self.centre_name != "":
             analysisElt = etree.SubElement(analysis_set, 'ANALYSIS', alias=self.alias, center_name=self.centre_name, analysis_date=self.analysis_date)
         else:
@@ -73,7 +81,7 @@ class createAnalysisXML:
         type = etree.SubElement(analysis_type, 'PATHOGEN_ANALYSIS')
 
         files = etree.SubElement(analysisElt, 'FILES')
-        fileElt = etree.SubElement(files, 'FILE', filename=self.analysis_file.get('name'), filetype=self.analysis_file.get('type'), checksum_method="MD5", checksum = self.analysis_file.get('md5_value'))
+        fileElt = self.build_file_element(files)
 
         analysis_attributes = self.add_analysis_attributes(analysisElt)      # Create analysis attributes XML sub-element
 
@@ -82,16 +90,18 @@ class createAnalysisXML:
         print(etree.tostring(analysis_xml, pretty_print=True, xml_declaration=True, encoding='UTF-8'))
         print('*' * 100)
 
-        analysis_xml.write('analysis_output.xml', pretty_print=True, xml_declaration=True, encoding='UTF-8')
+        xml_filename = 'analysis_{}.xml'.format(self.analysis_date)
+        analysis_xml.write(xml_filename, pretty_print=True, xml_declaration=True, encoding='UTF-8')
 
         return analysis_xml
 
 
 class createSubmissionXML:
     # Class which handles creation of a submission XML for submission to ENA
-    def __init__(self, alias, action, source_xml, schema, centre_name=""):
+    def __init__(self, alias, action, analysis_date, source_xml, schema, centre_name=""):
         self.alias = alias
         self.centre_name = centre_name
+        self.analysis_date = analysis_date
         self.action = action
         self.source_xml = source_xml
         self.schema = schema
@@ -110,4 +120,5 @@ class createSubmissionXML:
         print(etree.tostring(submission_xml, pretty_print=True, xml_declaration=True, encoding='UTF-8'))
         print('*' * 100)
 
-        submission_xml.write('submission.xml', pretty_print=True, xml_declaration=True, encoding='UTF-8')
+        xml_filename = 'submission_{}.xml'.format(self.analysis_date)
+        submission_xml.write(xml_filename, pretty_print=True, xml_declaration=True, encoding='UTF-8')
