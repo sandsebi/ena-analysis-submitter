@@ -2,7 +2,7 @@
 
 __author__ = "Nadim Rahman, Blaise Alako, Nima Pekseresht"
 
-import argparse, hashlib, os
+import argparse, hashlib, os, subprocess, sys, time
 from datetime import datetime
 from sra_objects import createAnalysisXML
 from sra_objects import createSubmissionXML
@@ -11,6 +11,8 @@ from sra_objects import createSubmissionXML
 ##### TO EDIT IF APPLICABLE
 analysis_attributes = {'PIPELINE_NAME': 'DTU_Evergreen', 'PIPELINE_VERSION': '1.0.0', 'SUBMISSION_TOOL': 'DTU_Evergreen'}           # Defining analysis attributes to be included in the analysis XML
 centre_name = 'DTU_Evergreen_Test'
+analysis_username = ''
+analysis_password = ''
 ###########################
 
 
@@ -109,23 +111,83 @@ class create_xmls:
         return submission_xml
 
 
-def upload_and_submit(datestamp, test):
-    """
-    Create the curl command and submit the analyses
-    :param analysis_xml: Analysis XML to submit
-    :param submission_xml: Submission XML to submit
-    :return: Curl command
-    """
-    # At the moment this returns an appropriate curl command, but would eventually be used to carry out the submission
-    if test is True:
-        command = 'curl -u Webin-XXXXX:PASSWORD -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://wwwdev.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(datestamp, datestamp)
-    else:
-        command = 'curl -u Webin-XXXXX:PASSWORD -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://www.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(datestamp, datestamp)
+class upload_and_submit:
+    def __init__(self, analysis_file, analysis_username, analysis_password, datestamp, test):
+        self.analysis_file = analysis_file
+        self.analysis_username = analysis_username
+        self.analysis_password = analysis_password
+        self.datestamp = datestamp
+        self.test = test
 
-    print("*" * 100)
-    print("CURL submission command: \n")
-    print(command)
-    print("*" * 100)
+    def upload_to_ENA(self):
+        """
+        Upload data file(s) to ENA
+        :return: Lists of successful file upload and list of any errors during upload
+        """
+        trialcount = 0
+        upload_errors = []
+        upload_success = []
+
+        for file in self.analysis_file:
+            command = "curl -T {}  ftp://webin.ebi.ac.uk --user {}:{}".format(file.get('name'), self.analysis_username, self.analysis_password)
+            md5downloaded = "curl -s ftp://webin.ebi.ac.uk/{} --user {}:{} | md5sum | cut -f1 -d ' '".format(os.path.basename(file.get('name')), self.analysis_username, self.analysis_password)
+            md5uploaded = file.get('md5_value')
+            print('-' * 100)
+            print("CURL command:\n{}".format(command))
+            print("MD5 Download command:\n{}".format(md5downloaded))
+            print("MD5 uploaded:\n{}".format(md5uploaded))
+            print('-' * 100)
+            uploadmd5, uploaderr = subprocess.Popen(md5uploaded, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+            uploadmd5 = uploadmd5.decode().strip(' \t\n\r')
+
+            sp = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out, err = sp.communicate()
+
+            print('*' * 100)
+            print("--> {} {} {} <--".format(os.path.basename(file.get('name')), uploadmd5, md5uploaded))
+            print('*' * 100)
+            if uploadmd5 == md5uploaded:
+                if out:
+                    upload_success.append(file.get('name'))
+                    print("standard output of subprocess:")
+                    print(out)
+                if err:
+                    print("standard error of subprocess:")
+                    print(err)
+                if sp.returncode != 0:
+                    upload_errors.append({file.get('name'): err.decode()})
+                    print(err.decode(), file=sys.stderr)
+                print("Returncode of subprocess:", sp.returncode)
+                return upload_success, upload_errors
+            else:
+                print("Analysis file {} may be corrupt, MD5 values do not match.".format(file.get('name')))
+                time.sleep(10)
+                self.upload_to_ENA()
+                trialcount += 1
+                if trialcount > 10:
+                    upload_errors.append({file.get('name'): err.decode()})
+                    return upload_success, upload_errors
+
+    def submit_data(self):
+        """
+        Coordinate the upload of data files and submission to ENA
+        :return: Upload of file(s) and curl command
+        """
+        success, errors = self.upload_to_ENA()      # Upload the data files to ENA prior to submission
+
+        # At the moment this returns an appropriate curl command, but would eventually be used to carry out the submission
+        if not errors:
+            if self.test is True:
+                command = 'curl -u Webin-XXXXX:PASSWORD -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://wwwdev.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.datestamp, self.datestamp)
+            else:
+                command = 'curl -u Webin-XXXXX:PASSWORD -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://www.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.datestamp, self.datestamp)
+        else:
+            print("File upload errors detected, aborted file upload:\n {}".format(errors))
+
+        print("*" * 100)
+        print("CURL submission command: \n")
+        print(command)
+        print("*" * 100)
 
 
 
@@ -166,5 +228,4 @@ if __name__=='__main__':
     submission_xml = create_xml_object.build_submission_xml()
 
     # Obtain a curl command for submission of the analysis
-    upload_and_submit(analysis_date, args.test)
-
+    submission = upload_and_submit(analysis_file, analysis_username, analysis_password, analysis_date, args.test)
