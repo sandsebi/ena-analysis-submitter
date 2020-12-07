@@ -9,10 +9,11 @@ from sra_objects import createSubmissionXML
 
 
 ##### TO EDIT IF APPLICABLE
-analysis_attributes = {'PIPELINE_NAME': 'DTU_Evergreen', 'PIPELINE_VERSION': '1.0.0', 'SUBMISSION_TOOL': 'DTU_Evergreen'}           # Defining analysis attributes to be included in the analysis XML
+analysis_attributes = {'PIPELINE_NAME': 'DTU_Evergreen', 'PIPELINE_VERSION': '1.0.0', 'SUBMISSION_TOOL': 'DTU_Evergreen-ENA_Analysis_Submitter', 'SUBMISSION_TOOL_VERSION': '1.0.0'}           # Defining analysis attributes to be included in the analysis XML
 centre_name = 'DTU_Evergreen_Test'
 analysis_username = ''
 analysis_password = ''
+action = 'ADD'      # What to do with new submission, ADD is the equivalent of submitting a new record
 ###########################
 
 
@@ -53,8 +54,10 @@ def convert_to_list(string, separator):
             li = f.readlines()
     else:
         if separator in string:
+            # If there is more than one sub-string specified
             li = list(string.split(separator))
         else:
+            # If there is only on string
             li = [string]
     return li
 
@@ -75,7 +78,7 @@ class file_handling:
     def construct_file_info(self):
         """
         Construct information on analysis data file(s) to be submitted
-        :return: List of dictionary/ies consisting file information
+        :return: List of dictionary/ies consisting of file information
         """
         files_information = []
         for file in self.file_list:
@@ -100,11 +103,19 @@ class create_xmls:
         self.centre_name = centre_name
 
     def build_analysis_xml(self):
+        """
+        Create an Analysis XML for submission
+        :return:
+        """
         analysis_obj = createAnalysisXML(self.alias, self.project_accession, self.run_accession, self.analysis_date, self.analysis_file, self.analysis_title, self.analysis_description, self.analysis_attributes, self.sample_accession, self.centre_name)
         analysis_xml = analysis_obj.build_analysis()
         return analysis_xml
 
     def build_submission_xml(self):
+        """
+        Create a Submission XML for submission
+        :return:
+        """
         analysis_xml_filename = 'analysis_{}.xml'.format(self.analysis_date)
         submission_obj = createSubmissionXML(self.alias, self.action, self.analysis_date, analysis_xml_filename, 'analysis', self.centre_name)
         submission_xml = submission_obj.build_submission()
@@ -128,38 +139,46 @@ class upload_and_submit:
         upload_errors = []
         upload_success = []
 
+        # Process each file that needs to be submitted
         for file in self.analysis_file:
-            command = "curl -T {}  ftp://webin.ebi.ac.uk --user {}:{}".format(file.get('name'), self.analysis_username, self.analysis_password)
-            md5downloaded = "curl -s ftp://webin.ebi.ac.uk/{} --user {}:{} | md5sum | cut -f1 -d ' '".format(os.path.basename(file.get('name')), self.analysis_username, self.analysis_password)
-            md5uploaded = file.get('md5_value')
+            command = "curl -T {}  ftp://webin.ebi.ac.uk --user {}:{}".format(file.get('name'), self.analysis_username, self.analysis_password)         # Command to upload file to Webin
+            md5downloaded = "curl -s ftp://webin.ebi.ac.uk/{} --user {}:{} | md5 | cut -f1 -d ' '".format(os.path.basename(file.get('name')), self.analysis_username, self.analysis_password)       # Command to check the MD5 value for the submitted file
+            md5uploaded = file.get('md5_value')         # The MD5 calculated before the file upload
             print('-' * 100)
             print("CURL command:\n{}".format(command))
             print("MD5 Download command:\n{}".format(md5downloaded))
             print("MD5 uploaded:\n{}".format(md5uploaded))
             print('-' * 100)
-            uploadmd5, uploaderr = subprocess.Popen(md5uploaded, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-            uploadmd5 = uploadmd5.decode().strip(' \t\n\r')
 
+            # Upload the file to Webin
             sp = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = sp.communicate()
 
+            # Obtain the MD5 of the submitted file
+            downloadmd5, downloaderr = subprocess.Popen(md5downloaded, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+            downloadmd5 = downloadmd5.decode().strip(' \t\n\r')
+
             print('*' * 100)
-            print("--> {} {} {} <--".format(os.path.basename(file.get('name')), uploadmd5, md5uploaded))
+            print("--> {} {} {} <--".format(os.path.basename(file.get('name')), md5uploaded, downloadmd5))
             print('*' * 100)
-            if uploadmd5 == md5uploaded:
+
+            if md5uploaded == downloadmd5:
+                # File integrity proven with matching MD5 values pre and post upload
                 if out:
                     upload_success.append(file.get('name'))
-                    print("standard output of subprocess:")
-                    print(out)
+                    print("Standard output of subprocess:")
+                    print(out.decode())
                 if err:
-                    print("standard error of subprocess:")
-                    print(err)
+                    upload_success.append(file.get('name'))
+                    print("Standard error of subprocess:")
+                    print(err.decode())
                 if sp.returncode != 0:
                     upload_errors.append({file.get('name'): err.decode()})
                     print(err.decode(), file=sys.stderr)
                 print("Returncode of subprocess:", sp.returncode)
                 return upload_success, upload_errors
             else:
+                # Failed file integrity check, try at least 10 times before failure
                 print("Analysis file {} may be corrupt, MD5 values do not match.".format(file.get('name')))
                 time.sleep(10)
                 self.upload_to_ENA()
@@ -175,19 +194,24 @@ class upload_and_submit:
         """
         success, errors = self.upload_to_ENA()      # Upload the data files to ENA prior to submission
 
-        # At the moment this returns an appropriate curl command, but would eventually be used to carry out the submission
+        # Attempt the submission if there are no errors reported in the file upload stage
         if not errors:
             if self.test is True:
-                command = 'curl -u Webin-XXXXX:PASSWORD -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://wwwdev.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.datestamp, self.datestamp)
+                command = 'curl -u {}:{} -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://wwwdev.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.analysis_username, self.analysis_password, self.datestamp, self.datestamp)
             else:
-                command = 'curl -u Webin-XXXXX:PASSWORD -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://www.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.datestamp, self.datestamp)
+                command = 'curl -u {}:{} -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://www.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.analysis_username, self.analysis_password, self.datestamp, self.datestamp)
+            sp = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out, err = sp.communicate()
+
+            print("-" * 100)
+            print("CURL submission command: \n")
+            print(command)
+            print("Returned output: \n")
+            print(out.decode())
+            print("-" * 100)
+
         else:
             print("File upload errors detected, aborted file upload:\n {}".format(errors))
-
-        print("*" * 100)
-        print("CURL submission command: \n")
-        print(command)
-        print("*" * 100)
 
 
 
@@ -211,21 +235,24 @@ if __name__=='__main__':
     timestamp = datetime.now()
     analysis_date = timestamp.strftime("%Y-%m-%dT%H:%M:%S")        # Get a formatted date and time string
 
+    #### CONFIGURABLE SECTION ####
     alias = 'integrated_dtu_evergreen_{}'.format(analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
+    analysis_title = "Analysis generated on {} from the processing of raw read sequencing data through DTU_Evergreen pipeline to generate a Phylogenetic tree.".format(
+        analysis_date)
+    analysis_description = "Phylogenetic tree analyses on data held within a data hub on {}. For more information on the DTU_Evergreen pipeline, please visit: https://bitbucket.org/jszarvas/viral_surveillance/src/master/. This pipeline has been integrated into EMBL-EBI ENA/COMPARE Data Hubs system, for more information on data hubs, please visit: http://europepmc.org/article/PMC/6927095.".format(
+        analysis_date)
+    ##############################
 
+    # Obtain file information
     file_preparation_obj = file_handling(files)     # Instantiate object for analysis file handling information
     analysis_file = file_preparation_obj.construct_file_info()      # Obtain information on file/s to be submitted for the analysis XML
     analysis_filename = os.path.basename(args.file)
-
-    analysis_title = "Analysis generated on {} from the processing of raw read sequencing data through DTU_Evergreen pipeline to generate a Phylogenetic tree.".format(analysis_date)
-    analysis_description = "Phylogenetic tree analyses on data held within a data hub on {}. For more information on the DTU_Evergreen pipeline, please visit: XXX. This pipeline has been integrated into EMBL-EBI ENA/COMPARE Data Hubs system, for more information on data hubs, please visit: XXX.".format(analysis_date)
-
-    action='ADD'        # What to do with the submission, ADD is the equivalent of submitting a new record
 
     # Create the analysis and submission XML for submission
     create_xml_object = create_xmls(alias, action, args.project, args.run_list, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, centre_name=centre_name)
     analysis_xml = create_xml_object.build_analysis_xml()
     submission_xml = create_xml_object.build_submission_xml()
 
-    # Obtain a curl command for submission of the analysis
-    submission = upload_and_submit(analysis_file, analysis_username, analysis_password, analysis_date, args.test)
+    # Upload data files and submit to ENA
+    submission_obj = upload_and_submit(analysis_file, analysis_username, analysis_password, analysis_date, args.test)
+    submission = submission_obj.submit_data()

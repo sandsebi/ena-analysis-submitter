@@ -1,7 +1,7 @@
 # ena-analysis-submitter
 
 ##Background
-This tool has been developed to handle submissions of Pathogen Analysis objects into ENA. It's intended use is as an additional component to integrated workflows in the [Data Hubs]().
+This tool has been developed to handle submissions of Pathogen Analysis objects into ENA. Its intended use is as an additional component to integrated workflows in the [Data Hubs](http://europepmc.org/article/PMC/6927095).
 
 The tool uploads analysis data files and carries out the submission to a project, although possible for general use, these projects are generally associated with certain Data Hubs, and therefore result in analysis being submitted to the Data Hub.
 
@@ -15,3 +15,6 @@ The tool expects knowledge of the following, prior to usage:
 `python3 analysis_submission.py -p <PROJECT_ACCESSION> -r <RUN_ACCESSION(S)> -f <FILE_NAME(S)> -t`
 
 `python3 analysis_submission.py --help` for more information.
+
+##Requirements
+- [Python3+](https://www.python.org/downloads/)

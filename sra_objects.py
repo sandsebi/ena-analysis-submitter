@@ -21,7 +21,10 @@ class createAnalysisXML:
     def split_sub_elements(self, references, parent_element, element_name):
         """
         Split into sub elements
-        :return:
+        :param references: The accessions which are to be referenced in the final XML object
+        :param parent_element: Parent element to add the references to
+        :param element_name: Name of the element which holds the reference
+        :return: A complete XML sub-element which is added to the final XMl object
         """
         if not isinstance(references, list):
             references = references.split(",")
@@ -43,6 +46,7 @@ class createAnalysisXML:
     def add_analysis_attributes(self, parent_element):
         """
         Create the analysis attributes section for the analysis XML
+        :param parent_element: Name of element to add section to
         :return: Analysis attributes XML sub-element
         """
         analysis_attributes = etree.SubElement(parent_element, 'ANALYSIS_ATTRIBUTES')
@@ -57,7 +61,7 @@ class createAnalysisXML:
         Build the analysis XML for submission
         :return: Analysis XML
         """
-        analysis_set = etree.Element('ANALYSIS_SET')
+        analysis_set = etree.Element('ANALYSIS_SET')        # Define the analysis XML object
         analysis_xml = etree.ElementTree(analysis_set)
 
         if self.centre_name != "":
@@ -90,6 +94,7 @@ class createAnalysisXML:
         print(etree.tostring(analysis_xml, pretty_print=True, xml_declaration=True, encoding='UTF-8'))
         print('*' * 100)
 
+        # Save the analysis XML to a file
         xml_filename = 'analysis_{}.xml'.format(self.analysis_date)
         analysis_xml.write(xml_filename, pretty_print=True, xml_declaration=True, encoding='UTF-8')
 
@@ -107,6 +112,10 @@ class createSubmissionXML:
         self.schema = schema
 
     def build_submission(self):
+        """
+        Build the submission XML which accompanies the analysis XML for submission
+        :return: Submission XML object
+        """
         submission_set = etree.Element('SUBMISSION_SET')
         submission_xml = etree.ElementTree(submission_set)
 
@@ -120,5 +129,6 @@ class createSubmissionXML:
         print(etree.tostring(submission_xml, pretty_print=True, xml_declaration=True, encoding='UTF-8'))
         print('*' * 100)
 
+        # Save the submission XML to a file
         xml_filename = 'submission_{}.xml'.format(self.analysis_date)
         submission_xml.write(xml_filename, pretty_print=True, xml_declaration=True, encoding='UTF-8')
