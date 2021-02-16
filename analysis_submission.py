@@ -51,7 +51,8 @@ def convert_to_list(string, separator):
     if separator == "\n":
         # Handle cases where the input string is a file location, reading a list from file
         with open(string) as f:
-            li = f.readlines()
+            li_read = f.read()
+            li = li_read.splitlines()
     else:
         if separator in string:
             # If there is more than one sub-string specified
@@ -226,7 +227,7 @@ if __name__=='__main__':
 
     if args.run_list != None and "," in args.run_list:
         runs = convert_to_list(args.run_list, ",")
-    elif args.sample_list != None:
+    elif args.run_list != None:
         runs = convert_to_list(args.run_list, "\n")
 
     files = convert_to_list(args.file, ",")
@@ -249,7 +250,7 @@ if __name__=='__main__':
     analysis_filename = os.path.basename(args.file)
 
     # Create the analysis and submission XML for submission
-    create_xml_object = create_xmls(alias, action, args.project, args.run_list, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, centre_name=centre_name)
+    create_xml_object = create_xmls(alias, action, args.project, runs, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, centre_name=centre_name)
     analysis_xml = create_xml_object.build_analysis_xml()
     submission_xml = create_xml_object.build_submission_xml()
 
