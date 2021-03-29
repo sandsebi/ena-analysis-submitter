@@ -9,8 +9,8 @@ from sra_objects import createSubmissionXML
 
 
 ##### TO EDIT IF APPLICABLE
-analysis_attributes = {'PIPELINE_NAME': 'DTU_Evergreen', 'PIPELINE_VERSION': '1.0.0', 'SUBMISSION_TOOL': 'DTU_Evergreen-ENA_Analysis_Submitter', 'SUBMISSION_TOOL_VERSION': '1.0.0'}           # Defining analysis attributes to be included in the analysis XML
-centre_name = 'DTU_Evergreen_Test'
+analysis_attributes = {'PIPELINE_NAME': 'COVID-19 Sequence Analysis Workflow', 'PIPELINE_VERSION': 'v1', 'SUBMISSION_TOOL': 'ENA_Analysis_Submitter', 'SUBMISSION_TOOL_VERSION': '1.0.0'}           # Defining analysis attributes to be included in the analysis XML
+centre_name = 'VEO'
 analysis_username = ''
 analysis_password = ''
 action = 'ADD'      # What to do with new submission, ADD is the equivalent of submitting a new record
@@ -237,10 +237,12 @@ if __name__=='__main__':
     analysis_date = timestamp.strftime("%Y-%m-%dT%H:%M:%S")        # Get a formatted date and time string
 
     #### CONFIGURABLE SECTION ####
-    alias = 'integrated_dtu_evergreen_{}'.format(analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
-    analysis_title = "Analysis generated on {} from the processing of raw read sequencing data through DTU_Evergreen pipeline to generate a Phylogenetic tree.".format(
-        analysis_date)
-    analysis_description = "Phylogenetic tree analyses on data held within a data hub on {}. For more information on the DTU_Evergreen pipeline, please visit: https://bitbucket.org/jszarvas/viral_surveillance/src/master/. This pipeline has been integrated into EMBL-EBI ENA/COMPARE Data Hubs system, for more information on data hubs, please visit: http://europepmc.org/article/PMC/6927095.".format(
+    run = runs[0]
+    sample = samples[0]
+    alias = 'covid_sequence_analysis_workflow_{}_{}'.format(run, analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
+    analysis_title = "VEO SARS-CoV-2 systematically called variant data of public run {} and sample {}, part of the snapshot generated on 22/03/2021.".format(
+        run, sample)
+    analysis_description = "All public SARS-CoV-2 INSDC raw read data is streamed through the COVID Sequence Analysis Workflow to produce a set of uniform variant calls. For more information on the pipeline, visit https://github.com/enasequence/covid-sequence-analysis-workflow.".format(
         analysis_date)
     ##############################
 
@@ -250,7 +252,7 @@ if __name__=='__main__':
     analysis_filename = os.path.basename(args.file)
 
     # Create the analysis and submission XML for submission
-    create_xml_object = create_xmls(alias, action, args.project, runs, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, centre_name=centre_name)
+    create_xml_object = create_xmls(alias, action, args.project, runs, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, sample_accession=samples, centre_name=centre_name)
     analysis_xml = create_xml_object.build_analysis_xml()
     submission_xml = create_xml_object.build_submission_xml()
 
