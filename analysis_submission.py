@@ -50,9 +50,13 @@ def convert_to_list(string, separator):
     """
     if separator == "\n":
         # Handle cases where the input string is a file location, reading a list from file
-        with open(string) as f:
-            li_read = f.read()
-            li = li_read.splitlines()
+        try:
+            with open(string) as f:
+                li_read = f.read()
+                li = li_read.splitlines()
+        except FileNotFoundError:
+            # Handle cases where a single value/accession was provided
+            li = string.split()
     else:
         if separator in string:
             # If there is more than one sub-string specified
@@ -143,7 +147,7 @@ class upload_and_submit:
         # Process each file that needs to be submitted
         for file in self.analysis_file:
             command = "curl -T {}  ftp://webin.ebi.ac.uk --user {}:{}".format(file.get('name'), self.analysis_username, self.analysis_password)         # Command to upload file to Webin
-            md5downloaded = "curl -s ftp://webin.ebi.ac.uk/{} --user {}:{} | md5 | cut -f1 -d ' '".format(os.path.basename(file.get('name')), self.analysis_username, self.analysis_password)       # Command to check the MD5 value for the submitted file
+            md5downloaded = "curl -s ftp://webin.ebi.ac.uk/{} --user {}:{} | md5sum | cut -f1 -d ' '".format(os.path.basename(file.get('name')), self.analysis_username, self.analysis_password)       # Command to check the MD5 value for the submitted file
             md5uploaded = file.get('md5_value')         # The MD5 calculated before the file upload
             print('-' * 100)
             print("CURL command:\n{}".format(command))
@@ -215,7 +219,6 @@ class upload_and_submit:
             print("File upload errors detected, aborted file upload:\n {}".format(errors))
 
 
-
 if __name__=='__main__':
     args = get_args()       # Get script arguments
 
@@ -242,7 +245,7 @@ if __name__=='__main__':
     alias = 'covid_sequence_analysis_workflow_{}_{}'.format(run, analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
     analysis_title = "VEO SARS-CoV-2 systematically called variant data of public run {} and sample {}, part of the snapshot generated on 22/03/2021.".format(
         run, sample)
-    analysis_description = "All public SARS-CoV-2 INSDC raw read data is streamed through the COVID Sequence Analysis Workflow to produce a set of uniform variant calls. For more information on the pipeline, visit https://github.com/enasequence/covid-sequence-analysis-workflow.".format(
+    analysis_description = "All public SARS-CoV-2 INSDC raw read data is streamed through the COVID Sequence Analysis Workflow to produce a set of uniform variant calls. For more information on the pipeline, visit https://github.com/enasequence/covid-sequence-analysis-workflow. VEO: https://www.veo-europe.eu/".format(
         analysis_date)
     ##############################
 
