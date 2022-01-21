@@ -233,10 +233,10 @@ if __name__=='__main__':
     analysis_date = timestamp.strftime("%Y-%m-%dT%H:%M:%S")        # Get a formatted date and time string
 
     #### CONFIGURABLE SECTION ####
-    alias = 'integrated_EMC_NAW_{}'.format(analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
-    analysis_title = "Analysis generated on {} from the processing of raw read sequencing data through EMC_NAW pipeline.".format(
+    alias = 'integrated_XXX_{}'.format(analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
+    analysis_title = "Analysis generated on {} from the processing of raw read sequencing data through XXX pipeline.".format(
         analysis_date)
-    analysis_description = "Analyses on data held within a data hub on {}. For more information on the EMC_NAW pipeline, please visit: https://github.com/dnieuw/ENA_SARS_Cov2_nanopore. This pipeline has been integrated into EMBL-EBI ENA/COMPARE Data Hubs system, for more information on data hubs, please visit: http://europepmc.org/article/PMC/6927095.".format(
+    analysis_description = "Analyses on data held within a data hub on {}. For more information on the XXX pipeline, please visit: XXX. This pipeline has been integrated into EMBL-EBI ENA/COMPARE Data Hubs system, for more information on data hubs, please visit: http://europepmc.org/article/PMC/6927095.".format(
         analysis_date)
     ##############################
 
