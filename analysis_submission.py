@@ -2,19 +2,11 @@
 
 __author__ = "Nadim Rahman, Blaise Alako, Nima Pekseresht"
 
-import argparse, hashlib, os, subprocess, sys, time
+import argparse, hashlib, os, subprocess, time, yaml
 from datetime import datetime
 from sra_objects import createAnalysisXML
 from sra_objects import createSubmissionXML
 
-
-##### TO EDIT IF APPLICABLE
-analysis_attributes = {'PIPELINE_NAME': 'DTU_Evergreen', 'PIPELINE_VERSION': '1.0.0', 'SUBMISSION_TOOL': 'DTU_Evergreen-ENA_Analysis_Submitter', 'SUBMISSION_TOOL_VERSION': '1.0.0'}           # Defining analysis attributes to be included in the analysis XML
-centre_name = 'DTU_Evergreen_Test'
-analysis_username = ''
-analysis_password = ''
-action = 'ADD'      # What to do with new submission, ADD is the equivalent of submitting a new record
-###########################
 
 
 def get_args():
@@ -35,31 +27,38 @@ def get_args():
     parser.add_argument('-s', '--sample_list', help='ENA sample accessions/s to link with the analysis submission, accepts a list of accessions (e.g. ERSXXXXX,ERSXXXXX) or a file with list of accessions separated by new line', required=False)
     parser.add_argument('-r', '--run_list', help='ENA run accession/s to link with the analysis submission, accepts a list of accessions (e.g. ERRXXXXX,ERRXXXXX) or a file with a list of accessions separated by new line', required=True)
     parser.add_argument('-f', '--file', help='Files of analysis to submit to the project, accepts a list of files (e.g. path/to/file1.csv.gz,path/to/file2.txt.gz)', type=str, required=True)
+    parser.add_argument('-a', '--analysis_type', help='Type of analysis to submit. Options: PATHOGEN_ANALYSIS, COVID19_CONSENSUS, COVID19_FILTERED_VCF', choices=['PATHOGEN_ANALYSIS', 'COVID19_CONSENSUS', 'COVID19_FILTERED_VCF'], required=True)         # Can add more options if you wish to share more analysis types
     parser.add_argument('-t', '--test', help='Specify whether to use ENA test server for submission', action='store_true')
     args = parser.parse_args()
-
     return args
 
 
-def convert_to_list(string, separator):
+def read_config():
+    """
+    Read in the configuration file
+    :return: A dictionary referring to tool configuration
+    """
+    with open("config.yaml") as f:
+        configuration = yaml.safe_load(f)
+    return configuration
+
+
+def convert_to_list(string):
     """
     Convert a string to a list by a particular separator
     :param string: String to convert to list
     :param separator: Separator to split string on
     :return: List
     """
-    if separator == "\n":
+    if os.path.isfile(string):
         # Handle cases where the input string is a file location, reading a list from file
         with open(string) as f:
             li_read = f.read()
             li = li_read.splitlines()
+    elif ',' in string:
+        li = list(string.split(','))
     else:
-        if separator in string:
-            # If there is more than one sub-string specified
-            li = list(string.split(separator))
-        else:
-            # If there is only on string
-            li = [string]
+        li = [string]
     return li
 
 
@@ -90,25 +89,26 @@ class file_handling:
 
 
 class create_xmls:
-    def __init__(self, alias, action, project_accession, run_accession, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, sample_accession="", centre_name=""):
+    def __init__(self, alias, project_accession, run_accession, analysis_date, analysis_file, analysis_title, analysis_description, configuration, analysis_type, sample_accession=""):
         self.alias = alias
-        self.action = action
+        self.action = configuration['ACTION']
         self.project_accession = project_accession
         self.run_accession = run_accession
-        self.analysis_attributes = analysis_attributes
         self.analysis_date = analysis_date
         self.analysis_file = analysis_file
         self.analysis_title = analysis_title
         self.analysis_description = analysis_description
+        self.analysis_attributes = {'PIPELINE_NAME': configuration['PIPELINE_NAME'], 'PIPELINE_VERSION': configuration['PIPELINE_VERSION'], 'SUBMISSION_TOOL': configuration['SUBMISSION_TOOL'], 'SUBMISSION_TOOL_VERSION': configuration['SUBMISSION_TOOL_VERSION']}
+        self.analysis_type = analysis_type
         self.sample_accession = sample_accession
-        self.centre_name = centre_name
+        self.centre_name = configuration['CENTER_NAME']
 
     def build_analysis_xml(self):
         """
         Create an Analysis XML for submission
         :return:
         """
-        analysis_obj = createAnalysisXML(self.alias, self.project_accession, self.run_accession, self.analysis_date, self.analysis_file, self.analysis_title, self.analysis_description, self.analysis_attributes, self.sample_accession, self.centre_name)
+        analysis_obj = createAnalysisXML(self.alias, self.project_accession, self.run_accession, self.analysis_date, self.analysis_file, self.analysis_title, self.analysis_description, self.analysis_attributes, self.analysis_type, self.sample_accession, self.centre_name)
         analysis_xml = analysis_obj.build_analysis()
         return analysis_xml
 
@@ -218,42 +218,37 @@ class upload_and_submit:
 
 if __name__=='__main__':
     args = get_args()       # Get script arguments
+    configuration = read_config()           # Configuration from YAML
 
     # Handle any metadata references
-    if args.sample_list != None and "," in args.sample_list:
-        samples = convert_to_list(args.sample_list, ",")
-    elif args.sample_list != None:
-        samples = convert_to_list(args.sample_list, "\n")
-
-    if args.run_list != None and "," in args.run_list:
-        runs = convert_to_list(args.run_list, ",")
-    elif args.run_list != None:
-        runs = convert_to_list(args.run_list, "\n")
-
-    files = convert_to_list(args.file, ",")
+    samples = convert_to_list(args.sample_list)
+    runs = convert_to_list(args.run_list)
+    if ',' in args.file:
+        files = list(args.file.split(','))
+    else:
+        files = [args.file]
 
     # Define sections to include in analysis XML
     timestamp = datetime.now()
     analysis_date = timestamp.strftime("%Y-%m-%dT%H:%M:%S")        # Get a formatted date and time string
 
     #### CONFIGURABLE SECTION ####
-    alias = 'integrated_dtu_evergreen_{}'.format(analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
-    analysis_title = "Analysis generated on {} from the processing of raw read sequencing data through DTU_Evergreen pipeline to generate a Phylogenetic tree.".format(
+    alias = 'integrated_EMC_NAW_{}'.format(analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
+    analysis_title = "Analysis generated on {} from the processing of raw read sequencing data through EMC_NAW pipeline.".format(
         analysis_date)
-    analysis_description = "Phylogenetic tree analyses on data held within a data hub on {}. For more information on the DTU_Evergreen pipeline, please visit: https://bitbucket.org/jszarvas/viral_surveillance/src/master/. This pipeline has been integrated into EMBL-EBI ENA/COMPARE Data Hubs system, for more information on data hubs, please visit: http://europepmc.org/article/PMC/6927095.".format(
+    analysis_description = "Analyses on data held within a data hub on {}. For more information on the EMC_NAW pipeline, please visit: https://github.com/dnieuw/ENA_SARS_Cov2_nanopore. This pipeline has been integrated into EMBL-EBI ENA/COMPARE Data Hubs system, for more information on data hubs, please visit: http://europepmc.org/article/PMC/6927095.".format(
         analysis_date)
     ##############################
 
     # Obtain file information
     file_preparation_obj = file_handling(files)     # Instantiate object for analysis file handling information
     analysis_file = file_preparation_obj.construct_file_info()      # Obtain information on file/s to be submitted for the analysis XML
-    analysis_filename = os.path.basename(args.file)
 
     # Create the analysis and submission XML for submission
-    create_xml_object = create_xmls(alias, action, args.project, runs, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, centre_name=centre_name)
+    create_xml_object = create_xmls(alias, args.project, runs, analysis_date, analysis_file, analysis_title, analysis_description, configuration, args.analysis_type, sample_accession=samples)
     analysis_xml = create_xml_object.build_analysis_xml()
     submission_xml = create_xml_object.build_submission_xml()
 
     # Upload data files and submit to ENA
-    submission_obj = upload_and_submit(analysis_file, analysis_username, analysis_password, analysis_date, args.test)
+    submission_obj = upload_and_submit(analysis_file, configuration['ANALYSIS_USERNAME'], configuration['ANALYSIS_PASSWORD'], analysis_date, args.test)
     submission = submission_obj.submit_data()

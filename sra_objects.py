@@ -3,18 +3,20 @@
 __author__ = "Nadim Rahman, Nima Pakseresht, Blaise Alako"
 
 from lxml import etree
+import os
 
 class createAnalysisXML:
     # Class which handles creation of an analysis XML for submission to ENA
-    def __init__(self, alias, project_accession, run_accession, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, sample_accession="", centre_name=""):
+    def __init__(self, alias, project_accession, run_accession, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, analysis_type, sample_accession="", centre_name=""):
         self.alias = alias
         self.project_accession = project_accession
         self.run_accession = run_accession
-        self.analysis_attributes = analysis_attributes
         self.analysis_date = analysis_date
         self.analysis_file = analysis_file
         self.analysis_title = analysis_title
         self.analysis_description = analysis_description
+        self.analysis_attributes = analysis_attributes
+        self.analysis_type = analysis_type
         self.sample_accession = sample_accession
         self.centre_name = centre_name
 
@@ -40,7 +42,8 @@ class createAnalysisXML:
         :return: Adding run section of XML
         """
         for file in self.analysis_file:
-            fileElt = etree.SubElement(parent_element, 'FILE', filename=file.get('name'), filetype=file.get('type'), checksum_method="MD5", checksum=file.get('md5_value'))
+            filename = os.path.basename(file.get('name'))       # Do not need full path in analysis XMl, just the file name - as it is being retrieved from Webin upload area
+            fileElt = etree.SubElement(parent_element, 'FILE', filename=filename, filetype=file.get('type'), checksum_method="MD5", checksum=file.get('md5_value'))
         return fileElt
 
     def add_analysis_attributes(self, parent_element):
@@ -82,7 +85,8 @@ class createAnalysisXML:
         runrefElt = self.split_sub_elements(self.run_accession, analysisElt, 'RUN_REF')
 
         analysis_type = etree.SubElement(analysisElt, 'ANALYSIS_TYPE')
-        type = etree.SubElement(analysis_type, 'PATHOGEN_ANALYSIS')
+        print(self.analysis_type)
+        type = etree.SubElement(analysis_type, self.analysis_type)
 
         files = etree.SubElement(analysisElt, 'FILES')
         fileElt = self.build_file_element(files)
