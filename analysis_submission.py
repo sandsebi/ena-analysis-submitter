@@ -233,10 +233,10 @@ if __name__=='__main__':
     analysis_date = timestamp.strftime("%Y-%m-%dT%H:%M:%S")        # Get a formatted date and time string
 
     #### CONFIGURABLE SECTION ####
-    alias = 'integrated_XXX_{}'.format(analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
-    analysis_title = "Analysis generated on {} from the processing of raw read sequencing data through XXX pipeline.".format(
+    alias = 'integrated_ELTE_CSAW_{}'.format(analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
+    analysis_title = "Analysis generated on {} from the processing of raw read sequencing data through ELTE_CSAW pipeline.".format(
         analysis_date)
-    analysis_description = "Analyses on data held within a data hub on {}. For more information on the XXX pipeline, please visit: XXX. This pipeline has been integrated into EMBL-EBI ENA/COMPARE Data Hubs system, for more information on data hubs, please visit: http://europepmc.org/article/PMC/6927095.".format(
+    analysis_description = "Analyses on data held within a data hub on {}. For more information on ELTE's COVID-19 Sequence Analysis Workflow pipeline, please visit: https://github.com/enasequence/covid-sequence-analysis-workflow. This pipeline has been integrated into EMBL-EBI ENA/COMPARE Data Hubs system, for more information on data hubs, please visit: http://europepmc.org/article/PMC/6927095.".format(
         analysis_date)
     ##############################
 
@@ -250,5 +250,5 @@ if __name__=='__main__':
     submission_xml = create_xml_object.build_submission_xml()
 
     # Upload data files and submit to ENA
-    submission_obj = upload_and_submit(analysis_file, configuration['ANALYSIS_USERNAME'], configuration['ANALYSIS_PASSWORD'], analysis_date, args.test)
+    submission_obj = upload_and_submit(analysis_file, configuration['ANALYSIS_USERNAME'], os.environ['ANALYSIS_PASSWORD'], analysis_date, args.test)
     submission = submission_obj.submit_data()
