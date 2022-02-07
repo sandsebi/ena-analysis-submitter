@@ -63,8 +63,9 @@ def convert_to_list(string):
 
 
 class file_handling:
-    def __init__(self, file_list):
+    def __init__(self, file_list, file_type):
         self.file_list = file_list
+        self.type = file_type
 
     def calculate_md5(self, file):
         """
@@ -81,9 +82,16 @@ class file_handling:
         :return: List of dictionary/ies consisting of file information
         """
         files_information = []
-        for file in self.file_list:
-            file_md5 = self.calculate_md5(file)     # Calculate an MD5 checksum value for file to be submitted
-            file_information = {'name': file, 'type': 'other', 'md5_value': file_md5}       # Create dictionary of information
+        for file in self.file_list:             # To be changed in future with dictionary of file types
+            file_md5 = self.calculate_md5(file)  # Calculate an MD5 checksum value for file to be submitted
+            if self.type == "COVID19_CONSENSUS":
+                file_type = "fasta"
+            elif self.type == "COVID19_FILTERED_VCF":
+                file_type = "vcf"
+            else:
+                file_type = "other"
+            file_information = {'name': file, 'type': file_type,
+                                'md5_value': file_md5}  # Create dictionary of information
             files_information.append(file_information)
         return files_information
 
@@ -241,7 +249,7 @@ if __name__=='__main__':
     ##############################
 
     # Obtain file information
-    file_preparation_obj = file_handling(files)     # Instantiate object for analysis file handling information
+    file_preparation_obj = file_handling(files, args.analysis_type)     # Instantiate object for analysis file handling information
     analysis_file = file_preparation_obj.construct_file_info()      # Obtain information on file/s to be submitted for the analysis XML
 
     # Create the analysis and submission XML for submission
