@@ -14,7 +14,7 @@ The tool expects knowledge of the following, prior to usage:
 2. One or more valid INSDC run accession(s), submitted to the project defined in 1 (e.g. ERR...). The script accepts run accessions separated by commas or can read from a file with an accession per line.
 3. One or more analysis files (full paths) to be submitted as part of the project in 1 and referring to the run(s) in 2. The script accepts file names separated by commas or can be read from a file with a file per line.
 
-`python3 analysis_submission.py -p <PROJECT_ACCESSION> -r <RUN_ACCESSION(S)> -f <FILE_NAME(S)> -a <ANALYSIS_TYPE> -t`
+`python3 analysis_submission.py -p <PROJECT_ACCESSION> -s <SAMPLE_ACCESSION(S)> -r <RUN_ACCESSION(S)> -f <FILE_NAME(S)> -a <ANALYSIS_TYPE> -t`
 
 `python3 analysis_submission.py --help` for more information.
 

@@ -28,6 +28,8 @@ def get_args():
     parser.add_argument('-r', '--run_list', help='ENA run accession/s to link with the analysis submission, accepts a list of accessions (e.g. ERRXXXXX,ERRXXXXX) or a file with a list of accessions separated by new line', required=True)
     parser.add_argument('-f', '--file', help='Files of analysis to submit to the project, accepts a list of files (e.g. path/to/file1.csv.gz,path/to/file2.txt.gz)', type=str, required=True)
     parser.add_argument('-a', '--analysis_type', help='Type of analysis to submit. Options: PATHOGEN_ANALYSIS, COVID19_CONSENSUS, COVID19_FILTERED_VCF', choices=['PATHOGEN_ANALYSIS', 'COVID19_CONSENSUS', 'COVID19_FILTERED_VCF'], required=True)         # Can add more options if you wish to share more analysis types
+    parser.add_argument('-au', '--analysis_username', help='Valid Webin submission account ID (e.g. Webin-XXXXX) used to carry out the submission', type=str, required=True)
+    parser.add_argument('-ap', '--analysis_password', help='Password for Webin submission account', type=str, required=True)
     parser.add_argument('-t', '--test', help='Specify whether to use ENA test server for submission', action='store_true')
     args = parser.parse_args()
     return args
@@ -240,23 +242,17 @@ if __name__=='__main__':
     timestamp = datetime.now()
     analysis_date = timestamp.strftime("%Y-%m-%dT%H:%M:%S")        # Get a formatted date and time string
 
-    #### CONFIGURABLE SECTION ####
-    alias = 'integrated_XXX_{}'.format(analysis_date)     # Alias to be used in the submission, required to link the submission and analysis
-    analysis_title = "Analysis generated on {} from the processing of raw read sequencing data through XXX pipeline.".format(
-        analysis_date)
-    analysis_description = "Analyses on data held within a data hub on {}. For more information on the XXX pipeline, please visit: XXX. This pipeline has been integrated into EMBL-EBI ENA/COMPARE Data Hubs system, for more information on data hubs, please visit: http://europepmc.org/article/PMC/6927095.".format(
-        analysis_date)
-    ##############################
+    alias = configuration['ALIAS'] + '_' + str(analysis_date)
 
     # Obtain file information
     file_preparation_obj = file_handling(files, args.analysis_type)     # Instantiate object for analysis file handling information
     analysis_file = file_preparation_obj.construct_file_info()      # Obtain information on file/s to be submitted for the analysis XML
 
     # Create the analysis and submission XML for submission
-    create_xml_object = create_xmls(alias, args.project, runs, analysis_date, analysis_file, analysis_title, analysis_description, configuration, args.analysis_type, sample_accession=samples)
+    create_xml_object = create_xmls(alias, args.project, runs, analysis_date, analysis_file, configuration['TITLE'], configuration['DESCRIPTION'], configuration, args.analysis_type, sample_accession=samples)
     analysis_xml = create_xml_object.build_analysis_xml()
     submission_xml = create_xml_object.build_submission_xml()
 
     # Upload data files and submit to ENA
-    submission_obj = upload_and_submit(analysis_file, configuration['ANALYSIS_USERNAME'], configuration['ANALYSIS_PASSWORD'], analysis_date, args.test)
+    submission_obj = upload_and_submit(analysis_file, args.analysis_username, args.analysis_password, analysis_date, args.test)
     submission = submission_obj.submit_data()
