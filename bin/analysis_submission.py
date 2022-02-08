@@ -3,6 +3,7 @@
 __author__ = "Nadim Rahman, Blaise Alako, Nima Pekseresht"
 
 import argparse, hashlib, os, subprocess, time, yaml
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from sra_objects import createAnalysisXML
 from sra_objects import createSubmissionXML
@@ -198,6 +199,25 @@ class upload_and_submit:
                     upload_errors.append({file.get('name'): err.decode()})
                     return upload_success, upload_errors
 
+    def retrieve_accession(self, out):
+        """
+        Retrieve the analysis accession of a successful result
+        :param out:
+        :return:
+        """
+        root = ET.fromstring(out.decode())
+        receipt_attributes = root.attrib
+
+        if receipt_attributes.get('success') == 'true':
+            analysis_attributes = root[0].attrib        # Dictionary of XML attributes for the analysis object
+            analysis_accession = analysis_attributes.get('accession')
+            with open('successful_submissions.txt', 'a') as f:
+                for file in self.analysis_file:
+                    f.write(str(analysis_accession) + "\t" + str(file.get('name')) + "\t" + str(self.datestamp) + "\n")             # Saves the analysis accession, local path to file and date of submission
+            return analysis_accession
+        elif receipt_attributes.get('success') == 'false':
+            print('Error with submission, see receipt XML.')
+
     def submit_data(self):
         """
         Coordinate the upload of data files and submission to ENA
@@ -213,6 +233,8 @@ class upload_and_submit:
                 command = 'curl -u {}:{} -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://www.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.analysis_username, self.analysis_password, self.datestamp, self.datestamp)
             sp = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = sp.communicate()
+
+            analysis_accession = self.retrieve_accession(out)
 
             print("-" * 100)
             print("CURL submission command: \n")
