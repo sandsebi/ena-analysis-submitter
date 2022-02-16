@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-__author__ = "Nadim Rahman, Blaise Alako, Nima Pekseresht"
+__author__ = "Nadim Rahman"
 
 import argparse, hashlib, os, subprocess, sys, time, yaml
 import xml.etree.ElementTree as ET
