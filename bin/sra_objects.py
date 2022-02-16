@@ -7,7 +7,7 @@ import os
 
 class createAnalysisXML:
     # Class which handles creation of an analysis XML for submission to ENA
-    def __init__(self, alias, project_accession, run_accession, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, analysis_type, sample_accession="", centre_name=""):
+    def __init__(self, alias, project_accession, run_accession, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, analysis_type, parent_dir, sample_accession="", centre_name=""):
         self.alias = alias
         self.project_accession = project_accession
         self.run_accession = run_accession
@@ -17,6 +17,7 @@ class createAnalysisXML:
         self.analysis_description = analysis_description
         self.analysis_attributes = analysis_attributes
         self.analysis_type = analysis_type
+        self.parent_dir = parent_dir
         self.sample_accession = sample_accession
         self.centre_name = centre_name
 
@@ -100,20 +101,22 @@ class createAnalysisXML:
 
         # Save the analysis XML to a file
         xml_filename = 'analysis_{}.xml'.format(self.analysis_date)
-        analysis_xml.write(xml_filename, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+        xml_filepath = os.path.join(self.parent_dir, xml_filename)
+        analysis_xml.write(xml_filepath, pretty_print=True, xml_declaration=True, encoding='UTF-8')
 
         return analysis_xml
 
 
 class createSubmissionXML:
     # Class which handles creation of a submission XML for submission to ENA
-    def __init__(self, alias, action, analysis_date, source_xml, schema, centre_name=""):
+    def __init__(self, alias, action, analysis_date, source_xml, schema, parent_dir, centre_name=""):
         self.alias = alias
         self.centre_name = centre_name
         self.analysis_date = analysis_date
         self.action = action
         self.source_xml = source_xml
         self.schema = schema
+        self.parent_dir = parent_dir
 
     def build_submission(self):
         """
@@ -135,4 +138,5 @@ class createSubmissionXML:
 
         # Save the submission XML to a file
         xml_filename = 'submission_{}.xml'.format(self.analysis_date)
-        submission_xml.write(xml_filename, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+        xml_filepath = os.path.join(self.parent_dir, xml_filename)
+        submission_xml.write(xml_filepath, pretty_print=True, xml_declaration=True, encoding='UTF-8')

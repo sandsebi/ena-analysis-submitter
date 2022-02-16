@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-__author__ = "Nadim Rahman, Blaise Alako, Nima Pekseresht"
+__author__ = "Nadim Rahman"
 
-import argparse, hashlib, os, subprocess, time, yaml
+import argparse, hashlib, os, subprocess, sys, time, yaml
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from sra_objects import createAnalysisXML
@@ -31,17 +31,20 @@ def get_args():
     parser.add_argument('-a', '--analysis_type', help='Type of analysis to submit. Options: PATHOGEN_ANALYSIS, COVID19_CONSENSUS, COVID19_FILTERED_VCF', choices=['PATHOGEN_ANALYSIS', 'COVID19_CONSENSUS', 'COVID19_FILTERED_VCF'], required=True)         # Can add more options if you wish to share more analysis types
     parser.add_argument('-au', '--analysis_username', help='Valid Webin submission account ID (e.g. Webin-XXXXX) used to carry out the submission', type=str, required=True)
     parser.add_argument('-ap', '--analysis_password', help='Password for Webin submission account', type=str, required=True)
+    parser.add_argument('-o', '--output_location', help='A parent directory to pull configuration file and store outputs.', type=str, required=False)
     parser.add_argument('-t', '--test', help='Specify whether to use ENA test server for submission', action='store_true')
     args = parser.parse_args()
     return args
 
 
-def read_config():
+def read_config(parent_dir):
     """
     Read in the configuration file
+    :param parent_dir: The optional parent directory which houses the configuration file
     :return: A dictionary referring to tool configuration
     """
-    with open("config.yaml") as f:
+    config_file = os.path.join(parent_dir, 'config.yaml')
+    with open(config_file) as f:
         configuration = yaml.safe_load(f)
     return configuration
 
@@ -100,7 +103,7 @@ class file_handling:
 
 
 class create_xmls:
-    def __init__(self, alias, project_accession, run_accession, analysis_date, analysis_file, analysis_title, analysis_description, configuration, analysis_type, sample_accession=""):
+    def __init__(self, alias, project_accession, run_accession, analysis_date, analysis_file, analysis_title, analysis_description, configuration, analysis_type, parent_dir, sample_accession=""):
         self.alias = alias
         self.action = configuration['ACTION']
         self.project_accession = project_accession
@@ -111,6 +114,7 @@ class create_xmls:
         self.analysis_description = analysis_description
         self.analysis_attributes = {'PIPELINE_NAME': configuration['PIPELINE_NAME'], 'PIPELINE_VERSION': configuration['PIPELINE_VERSION'], 'SUBMISSION_TOOL': configuration['SUBMISSION_TOOL'], 'SUBMISSION_TOOL_VERSION': configuration['SUBMISSION_TOOL_VERSION']}
         self.analysis_type = analysis_type
+        self.parent_dir = parent_dir
         self.sample_accession = sample_accession
         self.centre_name = configuration['CENTER_NAME']
 
@@ -119,7 +123,7 @@ class create_xmls:
         Create an Analysis XML for submission
         :return:
         """
-        analysis_obj = createAnalysisXML(self.alias, self.project_accession, self.run_accession, self.analysis_date, self.analysis_file, self.analysis_title, self.analysis_description, self.analysis_attributes, self.analysis_type, self.sample_accession, self.centre_name)
+        analysis_obj = createAnalysisXML(self.alias, self.project_accession, self.run_accession, self.analysis_date, self.analysis_file, self.analysis_title, self.analysis_description, self.analysis_attributes, self.analysis_type, self.parent_dir, self.sample_accession, self.centre_name)
         analysis_xml = analysis_obj.build_analysis()
         return analysis_xml
 
@@ -129,17 +133,18 @@ class create_xmls:
         :return:
         """
         analysis_xml_filename = 'analysis_{}.xml'.format(self.analysis_date)
-        submission_obj = createSubmissionXML(self.alias, self.action, self.analysis_date, analysis_xml_filename, 'analysis', self.centre_name)
+        submission_obj = createSubmissionXML(self.alias, self.action, self.analysis_date, analysis_xml_filename, 'analysis', self.parent_dir, self.centre_name)
         submission_xml = submission_obj.build_submission()
         return submission_xml
 
 
 class upload_and_submit:
-    def __init__(self, analysis_file, analysis_username, analysis_password, datestamp, test):
+    def __init__(self, analysis_file, analysis_username, analysis_password, datestamp, parent_dir, test):
         self.analysis_file = analysis_file
         self.analysis_username = analysis_username
         self.analysis_password = analysis_password
         self.datestamp = datestamp
+        self.parent_dir = parent_dir
         self.test = test
 
     def upload_to_ENA(self):
@@ -154,7 +159,7 @@ class upload_and_submit:
         # Process each file that needs to be submitted
         for file in self.analysis_file:
             command = "curl -T {}  ftp://webin.ebi.ac.uk --user {}:{}".format(file.get('name'), self.analysis_username, self.analysis_password)         # Command to upload file to Webin
-            md5downloaded = "curl -s ftp://webin.ebi.ac.uk/{} --user {}:{} | md5 | cut -f1 -d ' '".format(os.path.basename(file.get('name')), self.analysis_username, self.analysis_password)       # Command to check the MD5 value for the submitted file
+            md5downloaded = "curl -s ftp://webin.ebi.ac.uk/{} --user {}:{} | md5sum | cut -f1 -d ' '".format(os.path.basename(file.get('name')), self.analysis_username, self.analysis_password)       # Command to check the MD5 value for the submitted file
             md5uploaded = file.get('md5_value')         # The MD5 calculated before the file upload
             print('-' * 100)
             print("CURL command:\n{}".format(command))
@@ -211,7 +216,8 @@ class upload_and_submit:
         if receipt_attributes.get('success') == 'true':
             analysis_attributes = root[0].attrib        # Dictionary of XML attributes for the analysis object
             analysis_accession = analysis_attributes.get('accession')
-            with open('successful_submissions.txt', 'a') as f:
+            successful_subs = os.path.join(self.parent_dir, 'successful_submissions.txt')
+            with open(successful_subs, 'a') as f:
                 for file in self.analysis_file:
                     f.write(str(analysis_accession) + "\t" + str(file.get('name')) + "\t" + str(self.datestamp) + "\n")             # Saves the analysis accession, local path to file and date of submission
             return analysis_accession
@@ -227,10 +233,12 @@ class upload_and_submit:
 
         # Attempt the submission if there are no errors reported in the file upload stage
         if not errors:
+            submission_loc = os.path.join(self.parent_dir, 'submission')        # Prefix for the name of the submission XML with file path
+            analysis_loc = os.path.join(self.parent_dir, 'analysis')            # Prefix for the name of the analysis XML with file path
             if self.test is True:
-                command = 'curl -u {}:{} -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://wwwdev.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.analysis_username, self.analysis_password, self.datestamp, self.datestamp)
+                command = 'curl -u {}:{} -F "SUBMISSION=@{}_{}.xml" -F "ANALYSIS=@{}_{}.xml" "https://wwwdev.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.analysis_username, self.analysis_password, submission_loc, self.datestamp, analysis_loc, self.datestamp)
             else:
-                command = 'curl -u {}:{} -F "SUBMISSION=@submission_{}.xml" -F "ANALYSIS=@analysis_{}.xml" "https://www.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.analysis_username, self.analysis_password, self.datestamp, self.datestamp)
+                command = 'curl -u {}:{} -F "SUBMISSION=@{}_{}.xml" -F "ANALYSIS=@{}_{}.xml" "https://www.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.analysis_username, self.analysis_password, submission_loc, self.datestamp, analysis_loc, self.datestamp)
             sp = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = sp.communicate()
 
@@ -250,10 +258,21 @@ class upload_and_submit:
 
 if __name__=='__main__':
     args = get_args()       # Get script arguments
-    configuration = read_config()           # Configuration from YAML
+
+    if args.output_location is not None:
+        # Check that the output directory exists, as this would be a prefix.
+        if os.path.isdir(args.output_location) is not True:
+            print('ERROR: Please provide a valid and existing output directory... Exiting.')
+            sys.exit()
+    else:
+        args.output_location = '.'          # Default is the current working directory, unless specified
+    configuration = read_config(args.output_location)           # Configuration from YAML
 
     # Handle any metadata references
-    samples = convert_to_list(args.sample_list)
+    if args.sample_list is not None:            # Sample references are technically optional for analysis objects
+        samples = convert_to_list(args.sample_list)
+    else:
+        samples = ""
     runs = convert_to_list(args.run_list)
     if ',' in args.file:
         files = list(args.file.split(','))
@@ -264,17 +283,24 @@ if __name__=='__main__':
     timestamp = datetime.now()
     analysis_date = timestamp.strftime("%Y-%m-%dT%H:%M:%S")        # Get a formatted date and time string
 
-    alias = configuration['ALIAS'] + '_' + str(analysis_date)
+    # Create an appropriate alias to tag submissions
+    if len(runs) == 1:
+        alias = configuration['ALIAS'] + '_' + str(runs[0])
+        if samples != "" and len(samples) == 1:         # If there is a single sample reference provided, add this to the alias
+            alias += '_' + str(samples[0])
+        alias += "_" + str(analysis_date)
+    else:
+        alias = configuration['ALIAS'] + '_' + str(analysis_date)
 
     # Obtain file information
     file_preparation_obj = file_handling(files, args.analysis_type)     # Instantiate object for analysis file handling information
     analysis_file = file_preparation_obj.construct_file_info()      # Obtain information on file/s to be submitted for the analysis XML
 
     # Create the analysis and submission XML for submission
-    create_xml_object = create_xmls(alias, args.project, runs, analysis_date, analysis_file, configuration['TITLE'], configuration['DESCRIPTION'], configuration, args.analysis_type, sample_accession=samples)
+    create_xml_object = create_xmls(alias, args.project, runs, analysis_date, analysis_file, configuration['TITLE'], configuration['DESCRIPTION'], configuration, args.analysis_type, args.output_location, sample_accession=samples)
     analysis_xml = create_xml_object.build_analysis_xml()
     submission_xml = create_xml_object.build_submission_xml()
 
     # Upload data files and submit to ENA
-    submission_obj = upload_and_submit(analysis_file, args.analysis_username, args.analysis_password, analysis_date, args.test)
+    submission_obj = upload_and_submit(analysis_file, args.analysis_username, args.analysis_password, analysis_date, args.output_location, args.test)
     submission = submission_obj.submit_data()
