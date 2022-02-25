@@ -147,12 +147,11 @@ class upload_and_submit:
         self.parent_dir = parent_dir
         self.test = test
 
-    def upload_to_ENA(self):
+    def upload_to_ENA(self, trialcount):
         """
         Upload data file(s) to ENA
         :return: Lists of successful file upload and list of any errors during upload
         """
-        trialcount = 0
         upload_errors = []
         upload_success = []
 
@@ -198,59 +197,80 @@ class upload_and_submit:
                 # Failed file integrity check, try at least 10 times before failure
                 print("Analysis file {} may be corrupt, MD5 values do not match.".format(file.get('name')))
                 time.sleep(10)
-                self.upload_to_ENA()
                 trialcount += 1
-                if trialcount > 10:
+                if trialcount > 5:
                     upload_errors.append({file.get('name'): err.decode()})
                     return upload_success, upload_errors
+                else:
+                    self.upload_to_ENA(trialcount)
 
-    def retrieve_accession(self, out):
+    def retrieve_accession(self, root):
         """
         Retrieve the analysis accession of a successful result
-        :param out:
-        :return:
+        :param root: The receipt XML to be parsed
+        :return: Analysis accession from the receipt XML
         """
+        analysis_attributes = root[0].attrib        # Dictionary of XML attributes for the analysis object
+        analysis_accession = analysis_attributes.get('accession')
+        successful_subs = os.path.join(self.parent_dir, 'successful_submissions.txt')
+        with open(successful_subs, 'a') as f:
+            for file in self.analysis_file:
+                f.write(str(analysis_accession) + "\t" + str(file.get('name')) + "\t" + str(self.datestamp) + "\n")             # Saves the analysis accession, local path to file and date of submission
+        return analysis_accession
+
+    def submission(self, attempts):
+        """
+        Carry out the submission
+        :param attempts: The number of times the submission has been attempted
+        """
+        submission_loc = os.path.join(self.parent_dir,
+                                      'submission')  # Prefix for the name of the submission XML with file path
+        analysis_loc = os.path.join(self.parent_dir,
+                                    'analysis')  # Prefix for the name of the analysis XML with file path
+        if self.test is True:
+            command = 'curl -u {}:{} -F "SUBMISSION=@{}_{}.xml" -F "ANALYSIS=@{}_{}.xml" "https://wwwdev.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(
+                self.analysis_username, self.analysis_password, submission_loc, self.datestamp, analysis_loc,
+                self.datestamp)
+        else:
+            command = 'curl -u {}:{} -F "SUBMISSION=@{}_{}.xml" -F "ANALYSIS=@{}_{}.xml" "https://www.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(
+                self.analysis_username, self.analysis_password, submission_loc, self.datestamp, analysis_loc,
+                self.datestamp)
+        sp = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = sp.communicate()
+
         root = ET.fromstring(out.decode())
         receipt_attributes = root.attrib
-
-        if receipt_attributes.get('success') == 'true':
-            analysis_attributes = root[0].attrib        # Dictionary of XML attributes for the analysis object
-            analysis_accession = analysis_attributes.get('accession')
-            successful_subs = os.path.join(self.parent_dir, 'successful_submissions.txt')
-            with open(successful_subs, 'a') as f:
-                for file in self.analysis_file:
-                    f.write(str(analysis_accession) + "\t" + str(file.get('name')) + "\t" + str(self.datestamp) + "\n")             # Saves the analysis accession, local path to file and date of submission
-            return analysis_accession
-        elif receipt_attributes.get('success') == 'false':
-            print('Error with submission, see receipt XML.')
+        if receipt_attributes.get('success') == 'true':             # If submission successful, obtain the analysis accession
+            analysis_accession = self.retrieve_accession(root)
+            print('> {}'.format(analysis_accession))
+            return command, out
+        elif receipt_attributes.get('success') == 'false':          # Retry submission if unsuccessful
+            time.sleep(10)
+            attempts += 1
+            if attempts > 3:
+                print('> ERROR - Submission failed for {}: {}'.format(analysis_loc, err.decode()))
+                return command, out
+            else:
+                self.submission(attempts)
 
     def submit_data(self):
         """
         Coordinate the upload of data files and submission to ENA
         :return: Upload of file(s) and curl command
         """
-        success, errors = self.upload_to_ENA()      # Upload the data files to ENA prior to submission
+        trialcount = 0
+        success, errors = self.upload_to_ENA(trialcount)      # Upload the data files to ENA prior to submission
 
-        # Attempt the submission if there are no errors reported in the file upload stage
+        # Attempt the submission according to whether the upload was successful
         if not errors:
-            submission_loc = os.path.join(self.parent_dir, 'submission')        # Prefix for the name of the submission XML with file path
-            analysis_loc = os.path.join(self.parent_dir, 'analysis')            # Prefix for the name of the analysis XML with file path
-            if self.test is True:
-                command = 'curl -u {}:{} -F "SUBMISSION=@{}_{}.xml" -F "ANALYSIS=@{}_{}.xml" "https://wwwdev.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.analysis_username, self.analysis_password, submission_loc, self.datestamp, analysis_loc, self.datestamp)
-            else:
-                command = 'curl -u {}:{} -F "SUBMISSION=@{}_{}.xml" -F "ANALYSIS=@{}_{}.xml" "https://www.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(self.analysis_username, self.analysis_password, submission_loc, self.datestamp, analysis_loc, self.datestamp)
-            sp = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            out, err = sp.communicate()
-
-            analysis_accession = self.retrieve_accession(out)
-
+            attempts = 0
+            command, out = self.submission(attempts)
             print("-" * 100)
             print("CURL submission command: \n")
             print(command)
             print("Returned output: \n")
             print(out.decode())
             print("-" * 100)
-
         else:
             print("File upload errors detected, aborted file upload:\n {}".format(errors))
 

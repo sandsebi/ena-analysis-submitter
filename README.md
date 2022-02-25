@@ -26,7 +26,7 @@ An output directory can be specified using `-o` flag, where the configuration fi
 
 To utilise the Docker container:
 1. Pull from the docker repository:
-   `docker pull davidyuyuan/ena-analysis-submitter:1.0`
+   `docker pull davidyuyuan/ena-analysis-submitter:2.0`
    
 2. Run the image container interactively:
    `docker run -it -v pathto/data:/usr/local/bin/data ena-analysis-submitter:1.0 python analysis_submission.py -p <PROJECT_ACCESSION> -s <SAMPLE_ACCESSION(S)> -r <RUN_ACCESSION(S)> -f <FILE_NAME(S)> -a <ANALYSIS_TYPE> -au <WEBIN_USERNAME> -ap <WEBIN_PASSWORD> -t`
