@@ -32,8 +32,13 @@ def get_args():
     parser.add_argument('-au', '--analysis_username', help='Valid Webin submission account ID (e.g. Webin-XXXXX) used to carry out the submission', type=str, required=True)
     parser.add_argument('-ap', '--analysis_password', help='Password for Webin submission account', type=str, required=True)
     parser.add_argument('-o', '--output_location', help='A parent directory to pull configuration file and store outputs.', type=str, required=False)
-    parser.add_argument('-t', '--test', help='Specify whether to use ENA test server for submission', action='store_true')
+    parser.add_argument('-t', '--test', help='Specify whether to use ENA test server for submission. When using this parameter, specify true/T/t.', choices=['true', 'T', 't'], required=False)
     args = parser.parse_args()
+
+    if args.test in ['true', 'T', 't']:
+        args.test = True
+    else:
+        args.test = False
     return args
 
 
